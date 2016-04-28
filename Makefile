@@ -1,31 +1,54 @@
-CC=avr-gcc
-MMCU=atmega328
-CFLAGS=-Wall -Os -mmcu=$(MMCU)
-FREERTOS_DIR=$(shell pwd)/FreeRTOS
-FREERTOS_INCLUDE=$(FREERTOS_DIR)/include
-FREERTOS_SOURCE=$(FREERTOS_DIR)/%.c FreeRTOS $(FREERTOS_DIR)/portable/GCC/ATMega328/%.c
+CC:=avr-gcc
+MMCU:=atmega328
+CFLAGS:=-Wall -Os -mmcu=$(MMCU)
+FREERTOS_DIR:=FreeRTOS/Source
+# FREERTOS_DEMO=$(shell pwd)/FreeRTOS/Demo/Common
+FREERTOS_INCLUDE:=$(FREERTOS_DIR)/include
+OTHER_INCLUE:=$(FREERTOS_DIR)/portable/GCC/ATMega328p
 
-SOURCE=test.c
-OBJS=$(SOURCE:%.c=%.o) 
+FREERTOS_SOURCE:=$(shell ls $(FREERTOS_DIR)/*.c) $(shell ls $(FREERTOS_DIR)/portable/GCC/ATMega328p/*.c) \
+                $(shell ls $(FREERTOS_DIR)/portable/MemMang/*.c)
+
+# SOURCE:=test.c
+# SOURCE+=$(FREERTOS_SOURCE)
+# SOURCE=$(FREERTOS_SOURCE)
+SOURCE:=$(FREERTOS_SOURCE)
+SOURCE+=test.c
+OBJS:=$(SOURCE:%.c=%.o)
+OBJS:=$(patsubst %, build/OBJ/%, $(OBJS))
+
+ELF:=build/main.elf #build/ELF/$(SOURCE:%.c=%.elf)
+HEAP_C:=FREERTOS_DIR/portable/MemMang/heap_2.c
 # OBJS:=$(FREERTOS_SOURCE:%.c=%.o)
-HEX=$(SOURCE:%.c=%.hex)
+HEX:=main.hex
+LIB:=-I$(FREERTOS_INCLUDE) -I$(OTHER_INCLUE)
 
-.PHONY: clean
+.PHONY: all clean flash
 
-all:$(HEX)
+all: $(ELF)
 
+
+# $(HEX):$(ELF)
+# 	@echo "-------------linking hex file ------------------"
+# 	@mkdir -p build/HEX
+# 	@echo "linking hex files"
+# 	avr-objcopy -j .text -j .data -O ihex -c $^
 
 $(OBJS):$(SOURCE)
-	# @mkdir -p build/objs
-	@echo "compiling objects"
-	@avr-gcc -g -Os  -mmcu=atmega328 -c test.c
-	@avr-gcc -g -mmcu=atmega328 -o test.elf test.o
+	@mkdir -p $(@D)
+	@echo "compiling "$@
+	@$(CC) -c $(LIB) -g -Os -mmcu=atmega328 $< -o $@ #whenever compile and not link, put -c!!!!!
+#
+$(ELF):$(OBJS)
+	@mkdir -p $(@D)
+	@echo "Linking "
+	@$(CC) -g -mmcu=atmega328  $^ -o $@
 
-$(HEX):$(OBJS)
-	@echo "linking hex files"
-	@avr-objcopy -j .text -j .data -O ihex test.elf test.hex
 
 flash: $(HEX)
 	@avrdude -F -V -c arduino -p ATMEGA328P -P /dev/ttyACM0 -b 115200 -U flash:w:test.hex
+
 clean:
 	@rm -f *.o *.elf *.hex
+	@find . -name "*.o" -type f -delete
+	@rm -rf build
